@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ESP32 Wake-on-LAN</title>
+
+  <link rel="icon" type="image/svg+xml"
+        href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="%23ffb703"/><stop offset="1" stop-color="%23fb8500"/></linearGradient></defs><rect width="64" height="64" rx="12" fill="%231f2937"/><path d="M36 6 12 38h13l-5 20 32-40H36z" fill="url(%23g)"/></svg>'>
+
+  <meta name="theme-color" content="#0ea5e9"/>
+
+  <style>
+    :root { color-scheme: light dark; --bg: #0b1220; --card:#111827; --muted:#6b7280; --brand:#0ea5e9; --ok:#10b981; --err:#ef4444; }
+    *{box-sizing:border-box}
+    body{font-family:ui-sans-serif,system-ui,Segoe UI,Arial,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#0b1220 0%,#111827 60%,#0b1220 100%);padding:24px}
+    .card{width:100%;max-width:620px;background:rgba(17,24,39,.8);backdrop-filter: blur(6px);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:22px 18px;color:#e5e7eb;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    header{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+    .logo{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#1f2937,#0b1220);border:1px solid rgba(255,255,255,.08)}
+    .logo svg{width:22px;height:22px}
+    h1{font-size:20px;margin:0}
+    p.help{margin:4px 0 14px;color:#9ca3af;font-size:13px}
+
+    label{display:block;margin:10px 0 6px;font-size:13px;color:#cbd5e1}
+    input{width:100%;padding:12px 12px;font-size:15px;border-radius:12px;border:1px solid #334155;background:#0b1220;color:#e5e7eb;outline:none;transition:border .15s}
+    input:focus{border-color:#38bdf8}
+
+    .row{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+    @media (max-width:540px){ .row{grid-template-columns:1fr} }
+
+    .actions{display:grid;gap:10px;margin-top:16px;grid-template-columns:1fr 1fr}
+    .btn{padding:12px 14px;border:0;border-radius:12px;cursor:pointer;font-weight:600}
+    .btn.primary{background:linear-gradient(135deg,#22d3ee,#0ea5e9);color:#001018}
+    .btn.secondary{background:#111827;color:#e5e7eb;border:1px solid #253046}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+
+    .msg{margin-top:14px;font-family:ui-monospace,Consolas,monospace;white-space:pre-wrap;background:#0b1220;border:1px dashed #334155;border-radius:12px;padding:12px;color:#cbd5e1;max-height:260px;overflow:auto}
+
+    .toast{position:fixed;inset:auto 16px 16px auto;background:#0b1220;border:1px solid #1f2937;color:#e5e7eb;padding:10px 12px;border-radius:12px;opacity:0;transform:translateY(8px);transition:all .2s}
+    .toast.show{opacity:1;transform:translateY(0)}
+    .badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:12px;font-weight:600}
+    .ok{background:rgba(16,185,129,.15);color:#34d399;border:1px solid rgba(16,185,129,.35)}
+    .err{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.35)}
+
+    .hint{display:flex;gap:8px;align-items:center;margin-top:10px;color:#9ca3af;font-size:12px}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#0b1220;border:1px solid #28324a;font-size:12px}
+    .spinner{width:14px;height:14px;border:2px solid #334155;border-top-color:#38bdf8;border-radius:50%;animation:spin .8s linear infinite;display:none}
+    .spin .spinner{display:inline-block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <header>
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 11-14h-7z" fill="#38bdf8"/></svg>
+      </div>
+      <div>
+        <h1>ESP32 Wake-on-LAN</h1>
+        <p class="help">Enter API key and target device information, queue with <span class="chip">⚡ Wake!</span>.</p>
+      </div>
+    </header>
+
+    <form id="f" novalidate>
+      <label>API Key</label>
+      <input id="key" placeholder="API_KEY" required autocomplete="off" />
+
+      <div class="row">
+        <div>
+          <label>Device ID</label>
+          <input id="dev" value="esp32-lanbox" required autocomplete="off" />
+        </div>
+        <div>
+          <label>Unicast IP (optional)</label>
+          <input id="uip" placeholder="e.g. 192.168.1.123" autocomplete="off" />
+        </div>
+      </div>
+
+      <label>MAC Address</label>
+      <input id="mac" placeholder="AA:BB:CC:DD:EE:FF" required autocomplete="off" />
+
+      <div class="actions">
+        <button class="btn primary" type="submit" id="wakeBtn">⚡ Wake!</button>
+        <button class="btn secondary" type="button" id="save">Save</button>
+      </div>
+    </form>
+
+    <div class="hint">
+      <span class="spinner" id="spinner"></span>
+      <span id="hintText">Ready.</span>
+    </div>
+
+    <div class="msg" id="m" aria-live="polite"></div>
+  </div>
+
+  <div class="toast" id="toast"><span class="badge ok" id="toastBadge">Saved</span> <span id="toastText">Form saved locally.</span></div>
+
+  <script>
+    const els = {
+      key: document.getElementById('key'),
+      dev: document.getElementById('dev'),
+      mac: document.getElementById('mac'),
+      uip: document.getElementById('uip'),
+      msg: document.getElementById('m'),
+      form: document.getElementById('f'),
+      save: document.getElementById('save'),
+      wakeBtn: document.getElementById('wakeBtn'),
+      spinner: document.getElementById('spinner'),
+      hintText: document.getElementById('hintText'),
+      toast: document.getElementById('toast'),
+      toastBadge: document.getElementById('toastBadge'),
+      toastText: document.getElementById('toastText'),
+    };
+
+    (function init(){
+      try {
+        const s = JSON.parse(localStorage.getItem('wol_form') || '{}');
+        if (s.key) els.key.value = s.key;
+        if (s.dev) els.dev.value = s.dev;
+        if (s.mac) els.mac.value = s.mac;
+        if (s.uip) els.uip.value = s.uip;
+      } catch {}
+    })();
+
+    function toast(msg, ok=true){
+      els.toastBadge.className = 'badge ' + (ok ? 'ok' : 'err');
+      els.toastBadge.textContent = ok ? 'Success' : 'Error';
+      els.toastText.textContent = msg;
+      els.toast.classList.add('show');
+      setTimeout(()=> els.toast.classList.remove('show'), 1800);
+    }
+
+    function setBusy(busy, text) {
+      document.body.classList.toggle('spin', busy);
+      els.wakeBtn.disabled = busy;
+      els.spinner.style.display = busy ? 'inline-block' : 'none';
+      els.hintText.textContent = text || (busy ? 'Sending…' : 'Ready.');
+    }
+
+    function validateMac(mac) {
+      return /^([0-9A-Fa-f]{2}[:\-]){5}([0-9A-Fa-f]{2})$/.test(mac.trim());
+    }
+
+    els.save.addEventListener('click', () => {
+      const s = {
+        key: els.key.value.trim(),
+        dev: els.dev.value.trim(),
+        mac: els.mac.value.trim(),
+        uip: els.uip.value.trim(),
+      };
+      localStorage.setItem('wol_form', JSON.stringify(s));
+      toast('Form saved locally.', true);
+    });
+
+    els.form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (!validateMac(els.mac.value)) {
+        els.mac.focus();
+        toast('Invalid MAC address format.', false);
+        return;
+      }
+      if (!els.key.value.trim() || !els.dev.value.trim()) {
+        toast('API key and Device ID are required.', false);
+        return;
+      }
+
+      setBusy(true, 'Sending command…');
+      els.msg.textContent = '';
+
+      const qs = new URLSearchParams({
+        key: els.key.value.trim(),
+        device_id: els.dev.value.trim(),
+        mac: els.mac.value.trim(),
+        unicast_ip: els.uip.value.trim()
+      }).toString();
+
+      try {
+        const res = await fetch('enqueue_wake.php?' + qs, { method: 'GET' });
+        const js  = await res.json();
+        els.msg.textContent = `${res.status} ${res.statusText}\n` + JSON.stringify(js, null, 2);
+        if (res.ok && js && js.ok) {
+          toast('Wake command queued successfully.', true);
+        } else {
+          toast('Server returned an error.', false);
+        }
+      } catch (err) {
+        els.msg.textContent = 'Error: ' + (err && err.message ? err.message : err);
+        toast('Request failed.', false);
+      } finally {
+        setBusy(false);
+      }
+    });
+  </script>
+</body>
+</html>
