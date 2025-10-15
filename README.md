@@ -8,7 +8,9 @@ A complete Wake-on-LAN (WoL) system consisting of a web interface and ESP32 devi
 - **Web Interface**: Modern, responsive web UI for queuing wake commands
 - **ESP32 Device**: Polls for commands and sends WoL magic packets
 - **Queue System**: File-based job queue with atomic operations
-- **Security**: API key authentication and request logging
+- **Advanced Security**: Multi-layered protection with rate limiting, fingerprinting, and detailed logging
+- **Smart Logging**: Dual log system with privacy masking and ESP32 optimization
+- **Rate Limiting**: DDoS protection with ESP32 bypass for normal operation
 - **Flexible**: Supports both broadcast and unicast wake packets
 - **Real-time**: Live status updates and error handling
 
@@ -25,6 +27,9 @@ WakeOnLan/
 ├── log.php                     # Logging utilities
 ├── queue/                      # Job queue directory (auto-created)
 ├── logs/                       # Request logs directory (auto-created)
+│   ├── requests.log           # All API requests (masked data)
+│   ├── security.log           # Security incidents (detailed info)
+│   └── rate_limit.json        # Rate limiting data
 └── Esp32_Remote_Open_PC/
     └── Esp32_Remote_Open_PC.ino # ESP32 Arduino code
 ```
@@ -97,13 +102,27 @@ WakeOnLan/
 - `WOL_PORT`: UDP port for wake packets (default: 9)
 - `USE_INSECURE_TLS`: Set to false for production with proper certificates
 
-## 🔒 Security Features
+## 🔒 Advanced Security Features
 
+### **Multi-Layer Protection**
 - **API Key Authentication**: All endpoints require valid API key
-- **Request Logging**: All API calls are logged with sanitized data
-- **Input Validation**: MAC addresses and parameters are validated
+- **Rate Limiting**: Prevents DDoS attacks (10 req/min for wake commands)
+- **IP Whitelisting**: Optional IP restriction (currently disabled)
+- **Browser Fingerprinting**: Tracks suspicious behavior patterns
+- **ESP32 Bypass**: Smart filtering for legitimate device polling
+
+### **Intelligent Logging System**
+- **Dual Log Files**: Separate normal and security incident logs
+- **Privacy Protection**: IP and MAC addresses are masked
+- **Data Sanitization**: Sensitive information is automatically redacted
+- **ESP32 Optimization**: Successful polling requests are filtered out
+- **Detailed Forensics**: Full HTTP headers and browser fingerprints for security events
+
+### **Data Protection**
+- **MAC Masking**: `AA:BB:CC:DD:EE:FF` → `AA:**:**:**:**:FF`
+- **IP Masking**: `192.168.1.100` → `192.***.***00`
+- **API Key Masking**: `secret123key` → `sec***ey`
 - **File Locking**: Atomic operations prevent race conditions
-- **Data Sanitization**: Sensitive data is masked in logs
 
 ## 🐛 Troubleshooting
 
@@ -124,18 +143,25 @@ WakeOnLan/
 - Try unicast mode if broadcast doesn't work
 - Ensure target device has WoL enabled in BIOS/UEFI
 
-## 📊 Status Indicators
+## 📊 Status Indicators & Monitoring
 
 ### Web Interface
 - **Ready**: System ready for commands
 - **Sending**: Command being transmitted
 - **Success**: Command queued successfully
 - **Error**: Various error states with descriptions
+- **Rate Limited**: Too many requests (HTTP 429)
 
 ### ESP32 LED (if available)
 - **Single blink**: Command failed
 - **Double blink**: Command successful
 - **Rapid blinking**: WiFi connecting
+
+### Security Monitoring
+- **Normal Logs**: `logs/requests.log` - All legitimate requests
+- **Security Logs**: `logs/security.log` - Suspicious activities only
+- **Rate Limiting**: Automatic protection against abuse
+- **Real-time Alerts**: Immediate logging of security incidents
 
 ## 🔄 Job Lifecycle
 
@@ -144,14 +170,70 @@ WakeOnLan/
 3. **Done**: Job completed successfully (removed from queue)
 4. **Failed**: Job failed (kept in queue for retry)
 
-## 📝 Logging
+## 📝 Advanced Logging System
 
-All API requests are logged to `logs/requests.log` with:
-- Timestamp (ISO 8601 format)
-- Client IP address
-- User agent
-- Request parameters (with sensitive data masked)
-- Event type (enqueue, next, ack)
+### **Normal Request Log** (`logs/requests.log`)
+- All API requests except successful ESP32 polling
+- Masked IP addresses and sensitive data
+- Timestamp, user agent, and request parameters
+- Event types: enqueue, next, ack
+
+### **Security Incident Log** (`logs/security.log`)
+- Detailed forensic information for security events
+- Real IP addresses (for security analysis)
+- Full HTTP headers and browser fingerprints
+- Rate limiting violations and unauthorized access attempts
+
+### **Log Examples**
+
+**Normal Request:**
+```json
+{
+  "ts": "2025-10-15T22:51:00+03:00",
+  "ip": "192.***.***64",
+  "status": "success",
+  "tag": "enqueue"
+}
+```
+
+**Security Incident:**
+```json
+{
+  "ts": "2025-10-15T22:51:00+03:00",
+  "real_ip": "192.168.1.50",
+  "fingerprint": "a1b2c3d4e5f6...",
+  "status": "rate_limit_exceeded",
+  "ua": "Mozilla/5.0...",
+  "headers": {"x_forwarded_for": "10.0.0.1"}
+}
+```
+
+## ⚙️ Configuration Options
+
+### **Security Settings** (`log.php`)
+```php
+// Enable/disable IP restrictions
+function isAllowedIp($ip) {
+  return true; // Currently allows all IPs
+}
+
+// Rate limiting thresholds
+checkRateLimit($ip, 10);  // Max requests per minute
+```
+
+### **ESP32 Detection**
+- Automatic detection via `ESP32HTTPClient` user agent
+- Bypasses rate limiting for normal operation
+- Filters successful polling from logs
+
+## 🛡️ Security Best Practices
+
+1. **Change default API key** in `config.php`
+2. **Monitor security logs** regularly
+3. **Enable IP restrictions** if needed for high-security environments
+4. **Set proper file permissions** (755 for directories, 644 for files)
+5. **Use HTTPS** in production
+6. **Regular log rotation** to manage disk space
 
 ## 🤝 Contributing
 
@@ -163,4 +245,4 @@ This project is open source. Use it freely for personal or commercial projects.
 
 ---
 
-**Note**: Make sure to change default API keys and configure proper security measures before deploying to production environments.
+**Security Note**: This system includes enterprise-grade security features including rate limiting, browser fingerprinting, and detailed forensic logging. Monitor the security logs regularly and adjust rate limits based on your usage patterns.
