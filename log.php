@@ -60,12 +60,7 @@ function getBrowserFingerprint() {
 }
 
 // Rate limiting: Max 20 requests per minute per IP
-// ESP32 requests are exempt from rate limiting
 function checkRateLimit($ip, $maxRequests = 20) {
-  // Skip rate limiting for ESP32 HTTPClient
-  if (isESP32Request()) {
-    return true; // Always allow ESP32 requests
-  }
   
   $dir = __DIR__ . '/logs';
   if (!is_dir($dir)) @mkdir($dir, 0755, true);

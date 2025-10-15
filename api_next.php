@@ -5,9 +5,9 @@
 require __DIR__ . '/config.php';
 require __DIR__ . '/log.php';
 
-// Check rate limiting (ESP32 polls frequently, allow more requests)
+// Skip rate limiting for ESP32, apply to others
 $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-if (!checkRateLimit($clientIp, 30)) { // Max 30 requests per minute for polling
+if (!isESP32Request() && !checkRateLimit($clientIp, 30)) {
   log_event('next', [], 'rate_limit_exceeded');
   json_response(['ok'=>false,'err'=>'rate limit exceeded'], 429);
 }

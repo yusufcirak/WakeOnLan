@@ -5,9 +5,9 @@
 require __DIR__ . '/config.php';
 require __DIR__ . '/log.php';     
 
-// Check rate limiting first (applies to all IPs)
+// Skip rate limiting for ESP32, apply to others
 $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-if (!checkRateLimit($clientIp, 10)) { // Max 10 requests per minute for wake commands
+if (!isESP32Request() && !checkRateLimit($clientIp, 10)) {
   log_event('enqueue', [], 'rate_limit_exceeded');
   json_response(['ok'=>false,'err'=>'rate limit exceeded'], 429);
 }
